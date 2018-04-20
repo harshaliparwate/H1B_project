@@ -1,0 +1,171 @@
+
+
+
+
+// 2 a) Which part of the US has the most Data Engineer jobs for each year?
+// Data sets
+// 1	CERTIFIED-WITHDRAWN	UNIVERSITY OF MICHIGAN	BIOCHEMISTS AND BIOPHYSICISTS	POSTDOCTORAL RESEARCH FELLOW	N	
+// 36067	2016	ANN ARBOR, MICHIGAN	-83.7430378	42.2808256
+ 
+
+import org.apache.hadoop.io.Text;
+
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Partitioner;
+import org.apache.hadoop.mapreduce.Reducer;
+
+import org.apache.hadoop.conf.*;
+import org.apache.hadoop.fs.*;
+import org.apache.hadoop.mapreduce.lib.input.*;
+import org.apache.hadoop.mapreduce.lib.output.*;
+
+
+
+import java.io.*;
+
+import java.util.TreeMap;
+
+
+
+
+public class Q2a{
+	
+	public static class MapClass extends Mapper<LongWritable,Text,Text,LongWritable>
+	   {
+		
+		
+		private LongWritable val = new LongWritable(1);
+		
+	      public void map(LongWritable key, Text value, Context context)
+	      {	    	  
+	         try{
+	         
+	            if(key.get()>0)
+	            {
+	            	String[] str = value.toString().split("\t");
+	            	
+	            	if(str[4]!=null && str[4].contains("DATA ENGINEER"))
+	            	{
+	            		//str[4]=job title
+	            		//str[7]=year
+	            		//str[8]=worksite
+	            		Text data = new Text (str[8]+"\t"+str[7]);
+	            		
+	            	context.write(data, val);
+	            	} 
+	            }
+	         }
+	         catch(Exception e)
+	         {
+	            System.out.println(e.getMessage());
+	         }
+	      }
+	   }
+	
+	
+	
+	//Partitioner class
+	
+	   public static class CaderPartitioner extends
+	   Partitioner < Text, LongWritable >
+	   {
+	      @Override
+	      public int getPartition(Text key, LongWritable value, int numReduceTasks)
+	      {
+	         String[] str = key.toString().split("\t");
+	       
+	         if(str[1].equals("2011"))
+	         {
+	            return 0 % numReduceTasks;
+	         }
+	         else if(str[1].equals("2012"))
+	         {
+	            return 1 % numReduceTasks ;
+	         }
+	         else if(str[1].equals("2013"))
+	         {
+	            return 2 % numReduceTasks ;
+	         }
+	         
+	         else if(str[1].equals("2014"))
+	         {
+	            return 3  % numReduceTasks;
+	         }
+	         
+	         else if(str[1].equals("2015"))
+	         {
+	            return 4 % numReduceTasks;
+	         }
+	         
+	         else if(str[1].equals("2016"))
+	         {
+	            return 5 % numReduceTasks ;
+	         }
+	       
+	         else
+	         {
+	        	 return 6;
+	         }
+	
+	      }
+	   }
+	      
+	
+	   
+	
+	   public static class ReduceClass extends Reducer<Text,LongWritable,NullWritable,Text>
+	   {
+		
+		   private TreeMap<LongWritable, Text> worksite = new TreeMap<LongWritable, Text>();
+			long sum=0;
+			public void reduce(Text key,Iterable <LongWritable> values,Context context) throws IOException, InterruptedException
+			{
+			
+				for(LongWritable val:values)
+				{
+				sum+=val.get();
+				}
+				
+				worksite.put(new LongWritable(sum),new Text(key+","+sum));
+				
+				if (worksite.size()>5)
+					worksite.remove(worksite.firstKey());
+			}
+			protected void cleanup(Context context)throws IOException, InterruptedException
+			{
+				for (Text t : worksite.descendingMap().values()) 
+					context.write(NullWritable.get(), t);
+			}		
+		    
+		    
+	   }
+	
+	
+  
+	  public static void main(String[] args) throws Exception {
+		    Configuration conf = new Configuration();
+		    
+		    //conf.set("name", "value")
+		    //conf.set("mapreduce.input.fileinputformat.split.minsize", "134217728");
+		    Job job = Job.getInstance(conf, "Data engineers by worksite on each year");
+		    job.setJarByClass(Q2a.class);
+		    job.setMapperClass(MapClass.class);
+		    //job.setCombinerClass(ReduceClass.class);
+		 
+		   //job.setReducerClass(ReduceClass.class);
+		    job.setNumReduceTasks(7);
+		   
+		   job.setMapOutputKeyClass(Text.class);
+		   job.setMapOutputValueClass(LongWritable.class);
+		   
+		    job.setOutputKeyClass(NullWritable.class);
+		    job.setOutputValueClass(Text.class);
+		    
+		    FileInputFormat.addInputPath(job, new Path(args[0]));
+		    FileOutputFormat.setOutputPath(job, new Path(args[1]));
+		    System.exit(job.waitForCompletion(true) ? 0 : 1);
+		  }
+}
